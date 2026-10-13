@@ -148,10 +148,7 @@ Invalid input returns HTTP 422 without echoing submitted values:
 Other endpoints: `GET /health` (503 if the model cannot be loaded), `GET /model-info`, `GET /metrics`,
 `GET /drift`, `GET /predictions/recent?limit=200`, `POST /demo/generate {"n": 50, "drift": false}`.
 
-## Dashboard screenshots
 
-_No screenshots yet._ After running the dashboard, add your own, for example:
-`docs/screenshots/overview.png`, `docs/screenshots/drift.png`, and reference them here with Markdown image links.
 
 ## Docker
 
@@ -173,8 +170,8 @@ The API image trains the model at build time from the synthetic generator, runs 
 
 Step-by-step Render free-tier guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-- Live API: _not deployed / not verified yet_
-- Live dashboard: _not deployed / not verified yet_
+- Live API: https://fraud-detection-api-backend.onrender.com
+- Live dashboard: https://fraud-detection-api-dashboard.onrender.com
 
 Fill these in only after you have verified the live endpoints (checklist in `docs/PORTFOLIO.md`).
 
@@ -198,4 +195,4 @@ and shadow deployment; feedback labels from analysts; SHAP-style explanations; l
 
 ## License
 
-MIT - see [`LICENSE`](LICENSE) (replace `<YOUR NAME>` with your name).
+MIT - see (LICENSE) Ayyappan M
