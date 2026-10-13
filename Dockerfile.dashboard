@@ -1,0 +1,25 @@
+# Streamlit dashboard (no ML libraries; it calls the API over HTTP).
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+RUN useradd --create-home --uid 10001 appuser
+
+COPY requirements-dashboard.txt .
+RUN pip install -r requirements-dashboard.txt
+
+COPY dashboard ./dashboard
+RUN chown -R appuser:appuser /app
+
+USER appuser
+ENV API_BASE_URL=http://localhost:8000 \
+    PORT=8501
+
+EXPOSE 8501
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD python -c "import os,sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:%s/_stcore/health' % os.environ.get('PORT','8501'), timeout=4).status == 200 else 1)"
+
+CMD ["sh", "-c", "streamlit run dashboard/streamlit_app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false"]

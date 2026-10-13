@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+# Secrets / local config
+.env
+# Runtime data and model artifacts (never commit datasets or large binaries)
+*.db
+data/*
+!data/README.md
+models/*
+!models/README.md
+.DS_Store

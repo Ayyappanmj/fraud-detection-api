@@ -1,0 +1,35 @@
+# Start everything locally:  docker compose up --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DRIFT_PSI_THRESHOLD: "${DRIFT_PSI_THRESHOLD:-0.2}"
+      DRIFT_MIN_SAMPLES: "${DRIFT_MIN_SAMPLES:-100}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    volumes:
+      - api-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      API_BASE_URL: "http://api:8000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-data:

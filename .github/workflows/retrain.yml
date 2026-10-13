@@ -1,0 +1,54 @@
+name: Retrain model
+
+# Manual runs always work. The weekly schedule only runs if you create a
+# repository VARIABLE named ENABLE_SCHEDULED_RETRAIN with the value "true"
+# (Settings > Secrets and variables > Actions > Variables). No secrets needed.
+on:
+  workflow_dispatch:
+    inputs:
+      data_path:
+        description: "Optional path to a validated labelled CSV committed in the repo (blank = synthetic generator)"
+        required: false
+        default: ""
+      min_pr_auc:
+        description: "Quality gate: minimum TEST PR-AUC"
+        required: false
+        default: "0.10"
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  retrain:
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_SCHEDULED_RETRAIN == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Validate dataset (only when a CSV is provided)
+        if: ${{ github.event.inputs.data_path != '' }}
+        env:
+          DATA_PATH: ${{ github.event.inputs.data_path }}
+        run: python -m src.data_validation --data-path "$DATA_PATH"
+      - name: Train candidate model (fails if quality gate is not met)
+        env:
+          DATA_PATH: ${{ github.event.inputs.data_path }}
+          MIN_PR_AUC: ${{ github.event.inputs.min_pr_auc || '0.10' }}
+        run: |
+          if [ -n "$DATA_PATH" ]; then
+            python -m src.train --out-dir models_candidate --min-pr-auc "$MIN_PR_AUC" --data-path "$DATA_PATH"
+          else
+            python -m src.train --out-dir models_candidate --min-pr-auc "$MIN_PR_AUC"
+          fi
+      - name: Run tests
+        run: pytest -v
+      - name: Upload candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-model
+          path: models_candidate/
+          retention-days: 30

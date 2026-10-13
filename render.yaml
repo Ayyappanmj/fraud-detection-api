@@ -1,0 +1,29 @@
+# Render Blueprint (optional). You can also create both services by hand in the
+# dashboard - see docs/DEPLOYMENT.md. Free-tier plans and policies can change.
+services:
+  - type: web
+    name: fraud-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python -m src.train
+    startCommand: uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MODEL_DIR
+        value: models
+      - key: DB_PATH
+        value: /tmp/fraud_logs.db
+
+  - type: web
+    name: fraud-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-dashboard.txt
+    startCommand: streamlit run dashboard/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: API_BASE_URL
+        sync: false   # you will be prompted: paste the public URL of fraud-api (https://...onrender.com)
