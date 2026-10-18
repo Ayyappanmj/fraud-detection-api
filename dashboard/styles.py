@@ -303,6 +303,7 @@ def render_header(
     else:
         drift_badge = '<span class="sentinel-pill pill-neutral">DRIFT: MONITORING</span>'
 
+    th_val = float(threshold) if threshold is not None else 0.6607
     return f"""
     <div class="sentinel-header">
         <div class="sentinel-brand">
@@ -315,7 +316,7 @@ def render_header(
         <div class="status-cluster">
             <span class="sentinel-pill {api_badge_class}"><span class="beacon-dot"></span>{api_badge_text}</span>
             <span class="sentinel-pill pill-info">v{model_version}</span>
-            <span class="sentinel-pill pill-neutral">THRESHOLD: {threshold:.4f}</span>
+            <span class="sentinel-pill pill-neutral">THRESHOLD: {th_val:.4f}</span>
             {drift_badge}
         </div>
     </div>
@@ -353,13 +354,17 @@ def render_metric_card(
 
 def render_verdict_banner(
     is_suspicious: bool,
-    score: float,
-    threshold: float,
-    latency_ms: float,
+    score: float | None,
+    threshold: float | None,
+    latency_ms: float | None,
 ) -> str:
     """Renders a high-impact risk verdict banner for the Threat Lab."""
+    score_f = float(score) if score is not None else 0.0
+    threshold_f = float(threshold) if threshold is not None else 0.6607
+    latency_f = float(latency_ms) if latency_ms is not None else 0.0
+    margin = abs(score_f - threshold_f)
+
     if is_suspicious:
-        margin = (score - threshold)
         return f"""
         <div style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(159, 18, 57, 0.25));
                     border: 1px solid rgba(244, 63, 94, 0.5); border-radius: 14px; padding: 20px 24px;
@@ -378,14 +383,13 @@ def render_verdict_banner(
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <span class="sentinel-pill pill-danger">SCORE: {score:.4f}</span>
-                    <span class="sentinel-pill pill-neutral">LATENCY: {latency_ms:.2f}ms</span>
+                    <span class="sentinel-pill pill-danger">SCORE: {score_f:.4f}</span>
+                    <span class="sentinel-pill pill-neutral">LATENCY: {latency_f:.2f}ms</span>
                 </div>
             </div>
         </div>
         """
     else:
-        margin = (threshold - score)
         return f"""
         <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 95, 70, 0.2));
                     border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 20px 24px;
@@ -404,8 +408,8 @@ def render_verdict_banner(
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <span class="sentinel-pill pill-active">SCORE: {score:.4f}</span>
-                    <span class="sentinel-pill pill-neutral">LATENCY: {latency_ms:.2f}ms</span>
+                    <span class="sentinel-pill pill-active">SCORE: {score_f:.4f}</span>
+                    <span class="sentinel-pill pill-neutral">LATENCY: {latency_f:.2f}ms</span>
                 </div>
             </div>
         </div>

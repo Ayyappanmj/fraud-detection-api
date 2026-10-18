@@ -14,15 +14,18 @@ GRID_COLOR = "rgba(148, 163, 184, 0.12)"
 FONT_FAMILY = "Plus Jakarta Sans, sans-serif"
 
 
-def create_anomaly_gauge(score: float, threshold: float) -> go.Figure:
+def create_anomaly_gauge(score: float | None, threshold: float | None) -> go.Figure:
     """Cyber radial gauge meter displaying the anomaly score relative to the threshold."""
+    score_f = float(score) if score is not None else 0.0
+    threshold_f = float(threshold) if threshold is not None else 0.6607
+
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number+delta",
-            value=round(score, 4),
+            value=round(score_f, 4),
             domain={"x": [0, 1], "y": [0, 1]},
             delta={
-                "reference": threshold,
+                "reference": threshold_f,
                 "position": "bottom",
                 "increasing": {"color": "#FB7185"},
                 "decreasing": {"color": "#34D399"},
@@ -34,19 +37,19 @@ def create_anomaly_gauge(score: float, threshold: float) -> go.Figure:
                     "tickcolor": "#64748B",
                     "tickfont": {"family": "JetBrains Mono", "color": "#94A3B8", "size": 11},
                 },
-                "bar": {"color": "#FB7185" if score >= threshold else "#38BDF8", "thickness": 0.28},
+                "bar": {"color": "#FB7185" if score_f >= threshold_f else "#38BDF8", "thickness": 0.28},
                 "bgcolor": "rgba(15, 23, 42, 0.8)",
                 "borderwidth": 1,
                 "bordercolor": "rgba(255, 255, 255, 0.1)",
                 "steps": [
                     {"range": [0, 0.45], "color": "rgba(16, 185, 129, 0.18)"},
-                    {"range": [0.45, threshold], "color": "rgba(245, 158, 11, 0.20)"},
-                    {"range": [threshold, 1.0], "color": "rgba(244, 63, 94, 0.28)"},
+                    {"range": [0.45, threshold_f], "color": "rgba(245, 158, 11, 0.20)"},
+                    {"range": [threshold_f, 1.0], "color": "rgba(244, 63, 94, 0.28)"},
                 ],
                 "threshold": {
                     "line": {"color": "#F43F5E", "width": 3},
                     "thickness": 0.85,
-                    "value": threshold,
+                    "value": threshold_f,
                 },
             },
             number={
@@ -64,7 +67,7 @@ def create_anomaly_gauge(score: float, threshold: float) -> go.Figure:
         font={"family": FONT_FAMILY},
         annotations=[
             {
-                "text": f"DECISION THRESHOLD: {threshold:.4f}",
+                "text": f"DECISION THRESHOLD: {threshold_f:.4f}",
                 "x": 0.5,
                 "y": 0.15,
                 "xref": "paper",
@@ -472,14 +475,15 @@ def create_confusion_matrix_plot(cm: dict[str, int], title: str = "Isolation For
     return fig
 
 
-def create_latency_percentile_chart(latency_dict: dict[str, Any]) -> go.Figure:
+def create_latency_percentile_chart(latency_dict: dict[str, Any] | None) -> go.Figure:
     """Percentile latency metrics chart comparing p50, p95, p99 with SLA target."""
+    lat_map = latency_dict or {}
     metrics = ["p50 (Median)", "p95 (95th%)", "p99 (Tail)", "Mean Latency"]
     values = [
-        latency_dict.get("p50_ms", 1.8) or 1.8,
-        latency_dict.get("p95_ms", 3.9) or 3.9,
-        latency_dict.get("p99_ms", 6.2) or 6.2,
-        latency_dict.get("mean_ms", 2.1) or 2.1,
+        float(lat_map.get("p50_ms") or 1.8),
+        float(lat_map.get("p95_ms") or 3.9),
+        float(lat_map.get("p99_ms") or 6.2),
+        float(lat_map.get("mean_ms") or 2.1),
     ]
 
     fig = go.Figure()

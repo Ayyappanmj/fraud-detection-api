@@ -271,13 +271,36 @@ tab_radar, tab_lab, tab_audit, tab_drift, tab_bench, tab_telemetry = st.tabs(
 
 # ============================================================================== TAB 1: SURVEILLANCE RADAR
 with tab_radar:
-    preds = metrics.get("predictions", {})
-    reqs = metrics.get("requests", {})
-    lat = metrics.get("latency_ms", {})
-    total_txns = preds.get("total", len(df))
-    suspicious_count = preds.get("suspicious", sum(df["is_suspicious"]) if not df.empty else 0)
-    suspicious_rate = preds.get("suspicious_rate", (suspicious_count / max(total_txns, 1))) * 100
-    p95_lat = lat.get("p95_ms", 3.8) or 3.8
+    preds = metrics.get("predictions", {}) if isinstance(metrics, dict) else {}
+    reqs = metrics.get("requests", {}) if isinstance(metrics, dict) else {}
+    lat = metrics.get("latency_ms", {}) if isinstance(metrics, dict) else {}
+
+    total_txns = int(preds.get("total") if preds.get("total") is not None else (len(df) if not df.empty else 0))
+    suspicious_count = int(preds.get("suspicious") if preds.get("suspicious") is not None else (int(df["is_suspicious"].sum()) if not df.empty and "is_suspicious" in df.columns else 0))
+    if total_txns > 0:
+        susp_rate_raw = preds.get("suspicious_rate")
+        suspicious_rate = float(susp_rate_raw) * 100.0 if susp_rate_raw is not None else (suspicious_count / total_txns) * 100.0
+    else:
+        suspicious_rate = 0.0
+
+    p95_raw = lat.get("p95_ms")
+    p95_display = f"{float(p95_raw):.2f} ms" if p95_raw is not None else "Sub-5ms (Target)"
+    p95_subtext = "SLA Bound: < 10.0 ms" if p95_raw is not None else "Awaiting >20 observations"
+
+    # Robust PSI text calculation (handles None when samples < min_samples)
+    amount_feat = drift.get("features", {}).get("amount") if isinstance(drift, dict) and isinstance(drift.get("features"), dict) else {}
+    psi_raw = amount_feat.get("psi") if isinstance(amount_feat, dict) else None
+    if psi_raw is not None:
+        drift_subtext = f"PSI: {float(psi_raw):.4f}"
+        drift_delta_text = "Monitored"
+    elif drift_status == "insufficient_data":
+        n_recent = drift.get("n_recent", len(df) if not df.empty else 0)
+        min_samples = drift.get("min_samples", 100)
+        drift_subtext = f"Buffer: {n_recent}/{min_samples} rows"
+        drift_delta_text = "Buffering"
+    else:
+        drift_subtext = "PSI: Monitoring"
+        drift_delta_text = "Active"
 
     # KPI Strip
     k1, k2, k3, k4, k5 = st.columns(5)
@@ -321,9 +344,9 @@ with tab_radar:
         st.markdown(
             render_metric_card(
                 "Latency SLA (p95)",
-                f"{p95_lat:.2f} ms",
+                p95_display,
                 "⚡",
-                subtext="SLA Threshold: < 10.0 ms",
+                subtext=p95_subtext,
                 delta_text="Compliant",
                 delta_type="good",
             ),
@@ -333,11 +356,11 @@ with tab_radar:
         st.markdown(
             render_metric_card(
                 "Population Drift Health",
-                "STABLE" if drift_status == "no_drift" else "SHIFT DETECTED",
+                "STABLE" if drift_status == "no_drift" else ("SHIFT DETECTED" if drift_status == "drift_warning" else "BUFFERING"),
                 "📡",
-                subtext=f"PSI: {drift.get('features', {}).get('amount', {}).get('psi', 0.02):.4f}",
-                delta_text="Monitored",
-                delta_type="good" if drift_status == "no_drift" else "bad",
+                subtext=drift_subtext,
+                delta_text=drift_delta_text,
+                delta_type="good" if drift_status == "no_drift" else ("bad" if drift_status == "drift_warning" else "neutral"),
             ),
             unsafe_allow_html=True,
         )
@@ -374,10 +397,10 @@ with tab_radar:
             "created_at",
         ]
         display_df = df[view_cols].head(35).copy()
-        display_df["amount"] = display_df["amount"].apply(lambda v: f"${v:,.2f}")
-        display_df["distance_from_home_km"] = display_df["distance_from_home_km"].apply(lambda v: f"{v:,.1f} km")
-        display_df["anomaly_score"] = display_df["anomaly_score"].apply(lambda v: f"{v:.4f}")
-        display_df["status"] = display_df["is_suspicious"].apply(lambda s: "🚨 SUSPICIOUS" if s else "✅ CLEAN")
+        display_df["amount"] = display_df["amount"].apply(lambda v: f"${float(v):,.2f}" if pd.notna(v) else "$0.00")
+        display_df["distance_from_home_km"] = display_df["distance_from_home_km"].apply(lambda v: f"{float(v):,.1f} km" if pd.notna(v) else "0.0 km")
+        display_df["anomaly_score"] = display_df["anomaly_score"].apply(lambda v: f"{float(v):.4f}" if pd.notna(v) else "0.0000")
+        display_df["status"] = display_df["is_suspicious"].apply(lambda s: "🚨 SUSPICIOUS" if bool(s) else "✅ CLEAN")
 
         st.dataframe(
             display_df.drop(columns=["is_suspicious"]),
@@ -554,8 +577,16 @@ with tab_audit:
         )
 
         txn_record = df[df["transaction_id"] == selected_txn_id].iloc[0].to_dict()
-        txn_score = float(txn_record["anomaly_score"])
-        txn_flagged = bool(txn_record["is_suspicious"])
+        txn_score = float(txn_record.get("anomaly_score") or 0.0)
+        txn_flagged = bool(txn_record.get("is_suspicious", False))
+        proc_ms = float(txn_record.get("processing_ms") or 1.8)
+        th_val = float(threshold) if threshold is not None else 0.6607
+        amt_val = float(txn_record.get("amount") or 0.0)
+        avg_val = float(txn_record.get("avg_amount_30d") or 1.0)
+        dist_val = float(txn_record.get("distance_from_home_km") or 0.0)
+        hour_val = int(txn_record.get("hour") or 0)
+        velocity_val = int(txn_record.get("txn_count_24h") or 0)
+        foreign_val = bool(txn_record.get("is_foreign", False))
 
         d_col1, d_col2 = st.columns([1.1, 0.9])
 
@@ -566,7 +597,7 @@ with tab_audit:
                             border-radius: 12px; padding: 18px 22px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <span style="font-family: 'JetBrains Mono'; font-size: 1.1rem; font-weight: 700; color: #38BDF8;">
-                            {txn_record['transaction_id']}
+                            {txn_record.get('transaction_id', 'unknown')}
                         </span>
                         <span class="sentinel-pill {'pill-danger' if txn_flagged else 'pill-active'}">
                             {'🚨 FLAGGED ANOMALY' if txn_flagged else '✅ CLEAN TRANSACTION'}
@@ -574,11 +605,11 @@ with tab_audit:
                     </div>
                     <div style="font-size: 0.85rem; color: #94A3B8; margin-bottom: 8px;">
                         Recorded At: <strong style="color: #F8FAFC;">{txn_record.get('created_at')}</strong> ·
-                        Request ID: <code style="color: #60A5FA;">{txn_record.get('request_id', 'n/a')[:16]}...</code>
+                        Request ID: <code style="color: #60A5FA;">{str(txn_record.get('request_id', 'n/a'))[:16]}...</code>
                     </div>
                     <div style="font-size: 0.85rem; color: #94A3B8;">
-                        Anomaly Score: <strong style="color: #F43F5E;">{txn_score:.4f}</strong> (Threshold: {threshold:.4f}) ·
-                        Engine Inference Time: <strong style="color: #34D399;">{txn_record.get('processing_ms', 1.8):.2f} ms</strong>
+                        Anomaly Score: <strong style="color: #F43F5E;">{txn_score:.4f}</strong> (Threshold: {th_val:.4f}) ·
+                        Engine Inference Time: <strong style="color: #34D399;">{proc_ms:.2f} ms</strong>
                     </div>
                 </div>
                 """,
@@ -587,18 +618,17 @@ with tab_audit:
 
             # Risk Factor Checklist
             st.markdown("##### 📋 Risk Factors Checklist")
-            spend_ratio = txn_record["amount"] / max(txn_record["avg_amount_30d"], 1.0)
-            is_night = int(txn_record["hour"]) <= 5
-            is_distant = float(txn_record["distance_from_home_km"]) > 150.0
-            is_foreign = bool(txn_record["is_foreign"])
-            is_velocity_high = int(txn_record["txn_count_24h"]) >= 6
+            spend_ratio = amt_val / max(avg_val, 1.0)
+            is_night = hour_val <= 5
+            is_distant = dist_val > 150.0
+            is_velocity_high = velocity_val >= 6
 
             checks = [
                 ("Spike relative to 30d baseline (> 2.5x)", spend_ratio > 2.5, f"{spend_ratio:.2f}x average spend"),
-                ("Circadian night window (00:00 - 05:00 UTC)", is_night, f"Processed at {txn_record['hour']:02d}:00 UTC"),
-                ("Extreme geographic distance (> 150 km)", is_distant, f"{txn_record['distance_from_home_km']:.1f} km from home"),
-                ("Cross-border / international swipe", is_foreign, "Foreign merchant jurisdiction" if is_foreign else "Domestic transaction"),
-                ("Velocity spike (≥ 6 transactions in 24h)", is_velocity_high, f"{txn_record['txn_count_24h']} swipes in prior 24h"),
+                ("Circadian night window (00:00 - 05:00 UTC)", is_night, f"Processed at {hour_val:02d}:00 UTC"),
+                ("Extreme geographic distance (> 150 km)", is_distant, f"{dist_val:.1f} km from home"),
+                ("Cross-border / international swipe", foreign_val, "Foreign merchant jurisdiction" if foreign_val else "Domestic transaction"),
+                ("Velocity spike (≥ 6 transactions in 24h)", is_velocity_high, f"{velocity_val} swipes in prior 24h"),
             ]
 
             for label, is_trigger, detail in checks:
@@ -723,17 +753,26 @@ with tab_drift:
             # Summary Scorecard Table
             scorecard_rows = []
             for f_name, f_stats in features_data.items():
+                if not isinstance(f_stats, dict):
+                    continue
+                psi_v = f_stats.get("psi")
+                ks_v = f_stats.get("ks_pvalue")
+                ref_dict = f_stats.get("reference", {}) if isinstance(f_stats.get("reference"), dict) else {}
+                rec_dict = f_stats.get("recent", {}) if isinstance(f_stats.get("recent"), dict) else {}
+                ref_m = ref_dict.get("mean")
+                rec_m = rec_dict.get("mean")
+
                 scorecard_rows.append(
                     {
                         "Feature Name": f_name,
-                        "PSI Score": round(f_stats.get("psi", 0.0), 4),
-                        "KS p-value": round(f_stats.get("ks_pvalue", 1.0), 5),
-                        "Status": "⚠️ DRIFTED" if f_stats.get("drifted") else "✅ STABLE",
-                        "Ref Mean": round(f_stats.get("reference", {}).get("mean", 0.0), 2),
-                        "Live Mean": round(f_stats.get("recent", {}).get("mean", 0.0), 2),
+                        "PSI Score": f"{float(psi_v):.4f}" if psi_v is not None else "Pending (<100 obs)",
+                        "KS p-value": f"{float(ks_v):.5f}" if ks_v is not None else "Pending",
+                        "Status": "⚠️ DRIFTED" if f_stats.get("drifted") else ("✅ STABLE" if psi_v is not None else "📊 BUFFERING"),
+                        "Ref Mean": f"{float(ref_m):.2f}" if ref_m is not None else "n/a",
+                        "Live Mean": f"{float(rec_m):.2f}" if rec_m is not None else "n/a",
                     }
                 )
-            scorecard_df = pd.DataFrame(scorecard_rows).sort_values(by="PSI Score", ascending=False)
+            scorecard_df = pd.DataFrame(scorecard_rows)
             st.dataframe(scorecard_df, use_container_width=True, hide_index=True)
 
             # Feature Divergence Histogram Inspector
@@ -773,12 +812,12 @@ with tab_bench:
                 b_rows.append(
                     {
                         "Model Architecture": name,
-                        "PR-AUC (Primary Metric)": round(split_data.get("pr_auc", 0.0), 4),
-                        "ROC-AUC": round(split_data.get("roc_auc", 0.0), 4),
-                        "Precision": round(split_data.get("precision", 0.0), 4),
-                        "Recall": round(split_data.get("recall", 0.0), 4),
-                        "F1-Score": round(split_data.get("f1", 0.0), 4),
-                        "Accuracy": round(split_data.get("accuracy", 0.0), 4),
+                        "PR-AUC (Primary Metric)": round(float(split_data.get("pr_auc") or 0.0), 4),
+                        "ROC-AUC": round(float(split_data.get("roc_auc") or 0.0), 4),
+                        "Precision": round(float(split_data.get("precision") or 0.0), 4),
+                        "Recall": round(float(split_data.get("recall") or 0.0), 4),
+                        "F1-Score": round(float(split_data.get("f1") or 0.0), 4),
+                        "Accuracy": round(float(split_data.get("accuracy") or 0.0), 4),
                     }
                 )
         if b_rows:
