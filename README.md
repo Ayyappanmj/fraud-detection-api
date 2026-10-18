@@ -44,7 +44,7 @@ flowchart LR
 - Request IDs, JSON structured logs, no stack traces sent to clients.
 - SQLite request/prediction log, latency percentiles (only with enough observations).
 - PSI + KS drift monitor with a documented minimum sample size.
-- Streamlit dashboard (Plotly) with filters, manual scoring form, and demo-traffic buttons (including a deliberately drifted batch).
+- AEGIS Cyber-FinTech Streamlit dashboard (Plotly) with attack scenario presets, real-time risk gauge, Explainable AI (XAI) feature attribution, forensic audit dossiers, PSI/KS drift sentinel, dual-model benchmarking, and latency SLA tracking.
 - Pytest suite, GitHub Actions CI, manual/scheduled retraining workflow with a quality gate.
 - Non-root Docker images with health checks and a one-command `docker compose up`.
 
