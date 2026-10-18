@@ -586,7 +586,8 @@ with tab_audit:
         dist_val = float(txn_record.get("distance_from_home_km") or 0.0)
         hour_val = int(txn_record.get("hour") or 0)
         velocity_val = int(txn_record.get("txn_count_24h") or 0)
-        foreign_val = bool(txn_record.get("is_foreign", False))
+        is_foreign = bool(txn_record.get("is_foreign", False))
+        foreign_val = is_foreign
 
         d_col1, d_col2 = st.columns([1.1, 0.9])
 
@@ -627,7 +628,7 @@ with tab_audit:
                 ("Spike relative to 30d baseline (> 2.5x)", spend_ratio > 2.5, f"{spend_ratio:.2f}x average spend"),
                 ("Circadian night window (00:00 - 05:00 UTC)", is_night, f"Processed at {hour_val:02d}:00 UTC"),
                 ("Extreme geographic distance (> 150 km)", is_distant, f"{dist_val:.1f} km from home"),
-                ("Cross-border / international swipe", foreign_val, "Foreign merchant jurisdiction" if foreign_val else "Domestic transaction"),
+                ("Cross-border / international swipe", is_foreign, "Foreign merchant jurisdiction" if is_foreign else "Domestic transaction"),
                 ("Velocity spike (≥ 6 transactions in 24h)", is_velocity_high, f"{velocity_val} swipes in prior 24h"),
             ]
 
@@ -660,19 +661,19 @@ with tab_audit:
             dossier_json = json.dumps(
                 {
                     "dossier_export_utc": pd.Timestamp.utcnow().isoformat(),
-                    "transaction_id": txn_record["transaction_id"],
+                    "transaction_id": txn_record.get("transaction_id", "unknown"),
                     "anomaly_score": txn_score,
                     "classification": "suspicious" if txn_flagged else "normal",
-                    "threshold": threshold,
+                    "threshold": th_val,
                     "behavioral_attributes": {
-                        "amount": txn_record["amount"],
-                        "avg_amount_30d": txn_record["avg_amount_30d"],
-                        "distance_km": txn_record["distance_from_home_km"],
-                        "hour": txn_record["hour"],
-                        "velocity_24h": txn_record["txn_count_24h"],
-                        "is_foreign": txn_record["is_foreign"],
-                        "is_online": txn_record["is_online"],
-                        "card_age_days": txn_record["card_age_days"],
+                        "amount": amt_val,
+                        "avg_amount_30d": avg_val,
+                        "distance_km": dist_val,
+                        "hour": hour_val,
+                        "velocity_24h": velocity_val,
+                        "is_foreign": int(is_foreign),
+                        "is_online": int(txn_record.get("is_online", 0)),
+                        "card_age_days": float(txn_record.get("card_age_days", 0.0)),
                     },
                     "risk_checks": {
                         "spend_spike_ratio": round(spend_ratio, 2),
